@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: cassandra-test
+  namespace: cassandra-test
+  labels:
+    app: cassandra-test
+spec:
+  serviceName: cassandra-test
+  selector:
+    matchLabels:
+      app: cassandra-test
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: cassandra-test
+    spec:
+      containers:
+        - name: cassandra-test
+          image: cassandra:3.11.6
+          env:
+            - name: CASSANDRA_CLUSTER_NAME
+              value: cassandra-test
+            - name: CASSANDRA_SEEDS
+              value: cassandra-test-0.cassandra-test.cassandra-test.svc.cluster.local
+          ports:
+            - name: pure-intra
+              containerPort: 7000
+            - name: tls-intra
+              containerPort: 7001
+            - name: cql
+              containerPort: 9042
+            - name: thrift
+              containerPort: 9160
+          livenessProbe:
+            exec:
+              command: [ "/bin/sh", "-c", "nodetool status" ]
+            initialDelaySeconds: 90
+            periodSeconds: 30
+          readinessProbe:
+            exec:
+              command: [ "/bin/sh", "-c", "nodetool status | grep -E \"^UN\\s+${POD_IP}\"" ]
+            initialDelaySeconds: 90
+            periodSeconds: 30
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - "/bin/sh"
+                  - "-c"
+                  - "nodetool drain"
+      terminationGracePeriodSeconds: 300
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: cassandra-test
+  namespace: cassandra-test
+  labels:
+    app: cassandra-test
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - name: cql
+      protocol: TCP
+      port: 9042
+      targetPort: 9042
+    - name: thrift
+      protocol: TCP
+      port: 9160
+      targetPort: 9160
+  selector:
+    app: cassandra-test
